@@ -36,6 +36,12 @@ outputs =
     in 
       flake-utils.lib.eachSystem allSystems ( system: let
         pkgs = import nixpkgs { inherit system; };
+        zmkSrc = pkgs.fetchFromGitHub {
+          owner = "llamato";
+          repo = "zmk";
+          rev = "master";
+          hash = "sha256-ubD24viHiNa+YhjuyqkcenynvI+/po9W/Shzh7NJKIQ=";
+        };
         buildInputs = with pkgs; [
           # C/CPP
           bear
@@ -74,18 +80,30 @@ outputs =
           git
         ];
 
-        buildFirmwareForKeyboard = { board, shield }: pkgs.runCommand "${board}-${shield}-firmware" {
+        buildFirmwareForKeyboard = { board, shield, ... }: pkgs.stdenv.mkDerivation {
           inherit buildInputs;
-        } ''
-          west init -l app
-          west update
-          cd app
-          west build -p -b ${board} -- -DSHIELD=${shield}
-        '';
+          pname = "${board}-${shield}-firmware";
+          version = "1.0.0";
+          src = zmkSrc;
+
+          configurePhase = ''
+
+          '';
+
+          buildPhase = ''
+            rm -rf .west
+            rm -rf zephyr modules
+            rm -rf app/build
+            west init -l app
+            west update #broken
+            cd app
+            west build -p -b ${board} -- -DSHIELD=${shield}
+          '';
+        };
        in
         {
-          packages = builtins.mapAttrs (name: attrs:
-            buildFirmwareForKeyboard attrs
+          packages = builtins.mapAttrs (name: attr:
+            buildFirmwareForKeyboard attr
           ) supportedKeyboards;
           devShells = {
             default = zephyr-sdk.devShells.x86_64-linux.zephyr;
